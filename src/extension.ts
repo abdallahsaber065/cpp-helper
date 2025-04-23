@@ -127,7 +127,7 @@ async function generateImplementationInSource() {
   // Find or create the source file (do this only once)
   const headerFilePath = editor.document.uri.fsPath;
   let sourceFilePath = findCorrespondingSourceFile(headerFilePath);
-  
+
   if (!sourceFilePath) {
     sourceFilePath = await ensureSourceFileExists(headerFilePath);
     if (!sourceFilePath) {
@@ -138,92 +138,73 @@ async function generateImplementationInSource() {
 
   // Open the source file
   const sourceDocument = await vscode.workspace.openTextDocument(sourceFilePath);
-  
+  const sourceEditor = await vscode.window.showTextDocument(sourceDocument);
+
   // Check if the header is included and prepare content with include if needed
   let sourceText = sourceDocument.getText();
   let needsInclude = !checkHeaderIncluded(sourceFilePath, headerFilePath);
   let includedSourceText = sourceText;
-  
+
   if (needsInclude) {
     includedSourceText = addHeaderInclude(sourceText, headerFilePath);
   }
-  
-  // Collection of implementations to add
-  const implementationsToAdd: { position: vscode.Position, implementation: string }[] = [];
-  
-  // Process each selection
+
+  // Apply the include if needed
+  if (needsInclude) {
+    await sourceEditor.edit(editBuilder => {
+      const fullRange = new vscode.Range(
+        new vscode.Position(0, 0),
+        new vscode.Position(sourceDocument.lineCount, 0)
+      );
+      editBuilder.replace(fullRange, includedSourceText);
+    });
+  }
+
+  // Process each selection and add implementations
   for (const selection of selections) {
-    // Get the function prototype at the current position
     const prototype = parseFunctionPrototype(editor.document, selection.active);
     if (!prototype) {
       continue; // Skip invalid selections
     }
 
-    // Special handling for template functions - display warning once per template function
     if (prototype.isTemplated) {
       const implementInHeader = await vscode.window.showWarningMessage(
         'Template function implementations should typically be in the header file. Continue anyway?',
         'Continue', 'Implement in Header'
       );
-      
+
       if (implementInHeader === 'Implement in Header') {
-        // Skip this prototype and handle it with the header implementation
         continue;
       } else if (!implementInHeader) {
-        continue; // User cancelled
+        continue;
       }
     }
 
-    // Warning for static/inline functions
     if (prototype.isStatic || prototype.isInline) {
       const warning = prototype.isStatic 
         ? 'Static functions should be implemented in the header file.'
         : 'Inline functions should be implemented in the header file.';
-        
+
       const proceed = await vscode.window.showWarningMessage(
         `${warning} Continue anyway?`,
         'Continue', 'Cancel'
       );
-      
+
       if (!proceed || proceed === 'Cancel') {
         continue;
       }
     }
 
-    // Check if the function is already implemented in the source file
     if (functionAlreadyImplemented(prototype.name, prototype.className, sourceText)) {
       vscode.window.showWarningMessage(`Function '${prototype.name}' is already implemented in the source file`);
       continue;
     }
 
-    // Generate the implementation
     const implementation = generateImplementation(prototype, true);
-    
-    // Always add implementation at the end of the file
     const insertPosition = new vscode.Position(sourceDocument.lineCount, 0);
-    
-    // Add to the collection
-    implementationsToAdd.push({ position: insertPosition, implementation: '\n' + implementation + '\n' });
-  }
 
-  // Apply all implementations in a single edit, including the include if needed
-  if (needsInclude || implementationsToAdd.length > 0) {
-    const sourceEditor = await vscode.window.showTextDocument(sourceDocument);
     await sourceEditor.edit(editBuilder => {
-      // Add the include if needed
-      if (needsInclude) {
-        // Replace the entire content
-        const fullRange = new vscode.Range(
-          new vscode.Position(0, 0),
-          new vscode.Position(sourceDocument.lineCount, 0)
-        );
-        editBuilder.replace(fullRange, includedSourceText);
-      }
-      
-      // Add all implementations at the end
-      for (const item of implementationsToAdd) {
-        editBuilder.insert(item.position, item.implementation);
-      }
+      editBuilder.insert(insertPosition, '\n' + implementation + '\n');
     });
   }
 }
