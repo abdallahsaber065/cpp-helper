@@ -77,13 +77,7 @@ async function generateImplementationHere() {
   // Find the position to insert the implementation
   const insertPosition = findInsertPosition(editor.document, false);
   
-  // Preview the code
-  const doInsert = await showImplementationPreview(implementation);
-  if (!doInsert) {
-    return;
-  }
-  
-  // Insert the implementation into the document
+  // Insert the implementation directly without confirmation
   await editor.edit(editBuilder => {
     editBuilder.insert(insertPosition, '\n' + implementation + '\n');
   });
@@ -189,42 +183,16 @@ async function generateImplementationInSource() {
   // Generate the implementation
   const implementation = generateImplementation(prototype, true);
   
-  // Preview the code
-  const doInsert = await showImplementationPreview(implementation);
-  if (!doInsert) {
-    return;
-  }
-  
   // Find the position to insert (end of the file for source file)
   const insertPosition = findInsertPosition(sourceDocument, true);
   
-  // Show the source file and insert the implementation
+  // Show the source file and insert the implementation directly without confirmation
   const sourceEditor = await vscode.window.showTextDocument(sourceDocument);
   await sourceEditor.edit(editBuilder => {
     editBuilder.insert(insertPosition, '\n' + implementation + '\n');
   });
   
   vscode.window.showInformationMessage(`Successfully added implementation for '${prototype.name}'`);
-}
-
-// Show implementation preview to the user
-async function showImplementationPreview(implementation: string): Promise<boolean> {
-  const previewDocument = await vscode.workspace.openTextDocument({
-    content: implementation,
-    language: 'cpp'
-  });
-  
-  await vscode.window.showTextDocument(previewDocument, { preview: true, viewColumn: vscode.ViewColumn.Beside });
-  
-  const choice = await vscode.window.showInformationMessage(
-    'Insert this implementation?',
-    'Insert', 'Cancel'
-  );
-  
-  // Close the preview document
-  await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
-  
-  return choice === 'Insert';
 }
 
 export function deactivate() {}
