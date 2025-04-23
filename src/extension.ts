@@ -12,7 +12,8 @@ import {
 import {
   ensureSourceFileExists,
   checkHeaderIncluded,
-  findInsertPosition
+  findInsertPosition,
+  addHeaderInclude
 } from './utils/fileHandler';
 
 // This method is called when your extension is activated
@@ -134,35 +135,21 @@ async function generateImplementationInSource() {
       return;
     }
   }
-  
-  // Check if the source file includes the header (do this only once)
-  if (!checkHeaderIncluded(sourceFilePath, headerFilePath)) {
-    const addInclude = await vscode.window.showWarningMessage(
-      `The source file does not include the header "${path.basename(headerFilePath)}". Add it?`,
-      'Yes', 'No'
-    );
-    
-    if (addInclude === 'Yes') {
-      const headerRelPath = path.basename(headerFilePath);
-      const includeStatement = `#include "${headerRelPath}"\n\n`;
-      
-      try {
-        const sourceContent = fs.readFileSync(sourceFilePath, 'utf8');
-        fs.writeFileSync(sourceFilePath, includeStatement + sourceContent);
-      } catch (err) {
-        vscode.window.showErrorMessage(`Failed to update source file: ${err}`);
-        return;
-      }
-    }
-  }
 
   // Open the source file
   const sourceDocument = await vscode.workspace.openTextDocument(sourceFilePath);
-  const sourceEditor = await vscode.window.showTextDocument(sourceDocument);
+  
+  // Check if the header is included and prepare content with include if needed
+  let sourceText = sourceDocument.getText();
+  let needsInclude = !checkHeaderIncluded(sourceFilePath, headerFilePath);
+  let includedSourceText = sourceText;
+  
+  if (needsInclude) {
+    includedSourceText = addHeaderInclude(sourceText, headerFilePath);
+  }
   
   // Collection of implementations to add
   const implementationsToAdd: { position: vscode.Position, implementation: string }[] = [];
-  const sourceText = sourceDocument.getText();
   
   // Process each selection
   for (const selection of selections) {
@@ -212,16 +199,28 @@ async function generateImplementationInSource() {
     // Generate the implementation
     const implementation = generateImplementation(prototype, true);
     
-    // Find the position to insert (end of the file for source file)
-    const insertPosition = findInsertPosition(sourceDocument, true);
+    // Always add implementation at the end of the file
+    const insertPosition = new vscode.Position(sourceDocument.lineCount, 0);
     
     // Add to the collection
     implementationsToAdd.push({ position: insertPosition, implementation: '\n' + implementation + '\n' });
   }
 
-  // Apply all implementations in a single edit
-  if (implementationsToAdd.length > 0) {
+  // Apply all implementations in a single edit, including the include if needed
+  if (needsInclude || implementationsToAdd.length > 0) {
+    const sourceEditor = await vscode.window.showTextDocument(sourceDocument);
     await sourceEditor.edit(editBuilder => {
+      // Add the include if needed
+      if (needsInclude) {
+        // Replace the entire content
+        const fullRange = new vscode.Range(
+          new vscode.Position(0, 0),
+          new vscode.Position(sourceDocument.lineCount, 0)
+        );
+        editBuilder.replace(fullRange, includedSourceText);
+      }
+      
+      // Add all implementations at the end
       for (const item of implementationsToAdd) {
         editBuilder.insert(item.position, item.implementation);
       }

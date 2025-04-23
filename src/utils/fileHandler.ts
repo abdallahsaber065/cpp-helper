@@ -84,12 +84,44 @@ export function checkHeaderIncluded(sourceFilePath: string, headerFilePath: stri
 }
 
 /**
+ * Add an include statement for the header at the beginning of the source file
+ */
+export function addHeaderInclude(sourceContent: string, headerFilePath: string): string {
+    const headerRelPath = path.basename(headerFilePath);
+    const includeStatement = `#include "${headerRelPath}"\n\n`;
+    
+    // Check if file already has includes
+    const hasIncludes = /#include/.test(sourceContent);
+    
+    if (hasIncludes) {
+        // Find the last include statement
+        const lines = sourceContent.split('\n');
+        let lastIncludeIndex = -1;
+        
+        for (let i = 0; i < lines.length; i++) {
+            if (lines[i].trim().startsWith('#include')) {
+                lastIncludeIndex = i;
+            }
+        }
+        
+        if (lastIncludeIndex >= 0) {
+            // Insert after the last include
+            lines.splice(lastIncludeIndex + 1, 0, `#include "${headerRelPath}"`);
+            return lines.join('\n');
+        }
+    }
+    
+    // No existing includes, add at the beginning
+    return includeStatement + sourceContent;
+}
+
+/**
  * Find the proper position to insert a function implementation
  * @param document The document to insert into
  * @param isSourceFile Whether this is a source file or header file
  */
 export function findInsertPosition(document: vscode.TextDocument, isSourceFile: boolean): vscode.Position {
-    // For source files, insert at the end
+    // For source files, always insert at the end to maintain arrangement
     if (isSourceFile) {
         return new vscode.Position(document.lineCount, 0);
     }
