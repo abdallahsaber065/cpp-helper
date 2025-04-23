@@ -48,18 +48,20 @@ class Helpers {
  * Represents a parsed C++ function prototype
  */
 export interface FunctionPrototype {
-    fullSignature: string;
-    returnType: string;
-    name: string;
-    parameters: string;
-    qualifiers: string;
-    isTemplated: boolean;
-    className?: string;
-    classTemplate?: string;
+    fullSignature: string; // e.g., "int MyClass::foo(int a, int b) const noexcept;"
+    returnType: string; // e.g., "int"
+    name: string; // e.g., "foo"
+    parameters: string; // e.g., "int a, int b"
+    qualifiers: string; // e.g., "const noexcept"
+    preQualifiers: string[]; // e.g., ["inline", "static"]
+    isTemplated: boolean; // true if the function is templated
+    postQualifiers: string; // Qualifiers after the parameter list (e.g., "const noexcept")
+    className?: string; // e.g., "MyClass"
+    classTemplate?: string; // e.g., "MyClass<T>"
     templateParams?: string; // Full template parameters (e.g., "typename T")
     templateArgs?: string;   // Just the template argument names (e.g., "T")
-    isStatic: boolean;
-    isInline: boolean;
+    isStatic: boolean; // true if the function is static
+    isInline: boolean; // true if the function is inline
 }
 
 /**
@@ -71,33 +73,32 @@ export interface FunctionPrototype {
 export function parseFunctionPrototype(document: vscode.TextDocument, position: vscode.Position): FunctionPrototype | undefined {
     // Get the line at the current position
     const line = document.lineAt(position).text.trim();
-    
+
     // Skip if this is not a function declaration (no semicolon at the end)
     if (!line.endsWith(';')) {
         return undefined;
     }
-    
-    // Basic pattern to match function prototypes
-    // This regex identifies typical C++ function declarations with various modifiers
-    const functionRegex = /(?:(inline|static|virtual|explicit)\s+)?(?:([\w:]+(?:<[^>]*>)?)\s+)?([\w~:<>]+)\s*\((.*?)\)(\s*(?:const|noexcept|override|final|\s)*)\s*;$/;
+
+    // Updated regex to correctly capture pre-qualifiers, return type, name, parameters, and post-qualifiers
+    const functionRegex = /(?:(inline|static|virtual|explicit|const)\s+)*([\w:]+(?:<[^>]*>)?)\s+([\w~:<>]+)\s*\((.*?)\)(\s*(?:const|noexcept|override|final|\s)*)?;/;
     const match = line.match(functionRegex);
-    
+
     if (!match) {
         return undefined;
     }
-    
+
     // Extract matched parts
-    const specifier = match[1] || '';
+    const preQualifiers = match[1] ? match[1].split(/\s+/) : [];
     const returnType = match[2] || '';
     const nameWithClass = match[3];
     const parameters = match[4] || '';
-    const qualifiers = match[5] ? match[5].trim() : '';
-    
+    const postQualifiers = match[5] ? match[5].trim() : '';
+
     // Check if this is a member function
     const classSeparatorIndex = nameWithClass.lastIndexOf('::');
     let className: string | undefined;
     let name: string = nameWithClass;
-    
+
     if (classSeparatorIndex > 0) {
         className = nameWithClass.substring(0, classSeparatorIndex);
         name = nameWithClass.substring(classSeparatorIndex + 2);
@@ -105,26 +106,28 @@ export function parseFunctionPrototype(document: vscode.TextDocument, position: 
         // If this is in a class context, we need to check previous lines
         className = extractClassNameFromContext(document, position);
     }
-    
+
     // Check if the function is templated
     const isTemplated = name.includes('<') || returnType.includes('<');
-    
+
     // Check if the function is static or inline
-    const isStatic = specifier.includes('static');
-    const isInline = specifier.includes('inline');
-    
+    const isStatic = preQualifiers.includes('static');
+    const isInline = preQualifiers.includes('inline');
+
     // Extract template info for the class
     const templateInfo = extractTemplateInfo(document, position);
     const classTemplate = templateInfo.template;
     const templateParams = templateInfo.templateParams;
     const templateArgs = templateInfo.templateArgs;
-    
+
     return {
         fullSignature: line,
         returnType,
         name,
         parameters,
-        qualifiers,
+        preQualifiers,          // Specifiers before the return type
+        qualifiers: postQualifiers,  // For backward compatibility
+        postQualifiers,      // Qualifiers after the parameter list
         isTemplated,
         className,
         classTemplate,
@@ -302,32 +305,42 @@ export function checkHeaderGuards(document: vscode.TextDocument): boolean {
  * Generate a function implementation from its prototype
  */
 export function generateImplementation(prototype: FunctionPrototype, inSourceFile: boolean): string {
-    const { returnType, name, parameters, qualifiers, className, templateParams, templateArgs } = prototype;
-    
+    const { returnType, name, parameters, preQualifiers, postQualifiers, className, templateParams, templateArgs } = prototype;
+
     // Build the function header
     let implementation = '';
-    
-    // Add template declaration if the class is templated
-    if (className && templateParams) {
+
+    // Add template declaration if the class or function is templated
+    if (templateParams) {
         implementation += `template<${templateParams}>\n`;
     }
-    
+
+    // Add pre-qualifiers (e.g., inline, static, const return type)
+    if (preQualifiers.length > 0) {
+        implementation += `${preQualifiers.join(' ')} `;
+    }
+
     // Generate the function signature
     if (className) {
+        // Templated class case
         if (templateArgs) {
-            implementation += `${returnType} ${className}<${templateArgs}>::${name}(${parameters})${qualifiers}\n{\n`;
-        } else {
-            implementation += `${returnType} ${className}::${name}(${parameters})${qualifiers}\n{\n`;
+            implementation += `${returnType} ${className}<${templateArgs}>::${name}(${parameters}) ${postQualifiers}\n{\n`;
         }
-    } else {
-        implementation += `${returnType} ${name}(${parameters})${qualifiers}\n{\n`;
+        // Non-templated class case
+        else {
+            implementation += `${returnType} ${className}::${name}(${parameters}) ${postQualifiers}\n{\n`;
+        }
     }
-    
+    // Standalone function case
+    else {
+        implementation += `${returnType} ${name}(${parameters}) ${postQualifiers}\n{\n`;
+    }
+
     // Add only the TODO comment, no return statement
     implementation += '    // TODO: Implement\n';
-    
+
     implementation += '}\n';
-    
+
     return implementation;
 }
 

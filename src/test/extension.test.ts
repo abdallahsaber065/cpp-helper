@@ -66,6 +66,8 @@ suite('C++ Function Generator Extension Test Suite', () => {
 			name: 'foo',
 			parameters: 'int a, int b',
 			qualifiers: '',
+			preQualifiers: [],
+			postQualifiers: '',
 			isTemplated: false,
 			isStatic: false,
 			isInline: false
@@ -83,6 +85,8 @@ suite('C++ Function Generator Extension Test Suite', () => {
 			name: 'getValue',
 			parameters: '',
 			qualifiers: 'const noexcept',
+			preQualifiers: [],
+			postQualifiers: ' const noexcept',
 			isTemplated: false,
 			className: 'MyClass',
 			isStatic: false,
