@@ -13,6 +13,10 @@ A VS Code extension that automatically generates C++ function implementations fr
   - Preserves parameter names, return types, and qualifiers (`const`, `noexcept`, etc.)
   - Full support for member functions with class scope resolution
 
+- **Class-Aware Implementation**:
+  - Select a class name to generate implementations for all methods at once
+  - Detects templated classes and properly handles template parameters
+
 - **Intelligent Source File Finding**:
   - Searches for matching source files in common locations:
     - Same directory as the header
@@ -30,18 +34,26 @@ A VS Code extension that automatically generates C++ function implementations fr
 - **User Experience**:
   - Preview implementation before insertion
   - Configurable settings
+  - Context menu integration for C++ files
   - Keyboard shortcut: `Ctrl+Shift+I` (Windows/Linux) or `Cmd+Shift+I` (Mac)
 
-![Feature Demo](images/demo.gif)
+![Feature Demo](https://raw.githubusercontent.com/abdallahsaber065/cpp-helper/main/images/demo.gif)
 
 ## Usage
 
-1. Place your cursor on a function prototype in a C++ header file (ending in `.h`, `.hpp`, or `.hxx`)
+1. Place your cursor on a function prototype or class name in a C++ header file (ending in `.h`, `.hpp`, or `.hxx`)
 2. Right-click and select either:
    - **Generate Implementation Here**
    - **Generate Implementation in Source**
-3. Preview the generated code
-4. Click "Insert" to add the implementation
+3. The implementation will be generated in the selected location
+
+## Bulk Implementation
+
+When you select a class name before invoking the extension commands:
+1. All methods in the class will be processed at once
+2. A summary will show how many implementations were generated
+3. Already implemented methods will be skipped automatically
+4. Special functions (templated, static, inline) will be handled appropriately
 
 ## Example
 
@@ -53,6 +65,7 @@ A VS Code extension that automatically generates C++ function implementations fr
 class Processor {
 public:
     void process(int id, const std::string& data) noexcept;
+    int calculate(double value) const;
 };
 ```
 
@@ -61,6 +74,12 @@ public:
 void Processor::process(int id, const std::string& data) noexcept
 {
     // TODO: Implement
+}
+
+int Processor::calculate(double value) const
+{
+    // TODO: Implement
+    return 0;
 }
 ```
 
@@ -82,12 +101,7 @@ This extension contributes the following settings:
 
 ## Release Notes
 
-### 1.0.0
-
-- Initial release with core functionality
-- Support for generating implementations in header or source files
-- Smart file search and creation logic
-- Safety checks for common C++ issues
+See [CHANGELOG.md](CHANGELOG.md) for release details.
 
 ## Contributing
 
