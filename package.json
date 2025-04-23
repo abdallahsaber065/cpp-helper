@@ -1,0 +1,92 @@
+{
+  "name": "cpp-helper",
+  "displayName": "C++ Function Generator",
+  "description": "Automatically generates C++ function implementations from prototypes in header files",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.99.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Snippets",
+    "Other"
+  ],
+  "activationEvents": [
+    "onLanguage:cpp",
+    "onLanguage:c"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "cpp-helper.generateHere",
+        "title": "Generate Implementation Here"
+      },
+      {
+        "command": "cpp-helper.generateInSource",
+        "title": "Generate Implementation in Source"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "when": "editorLangId == cpp && !editorReadonly",
+          "command": "cpp-helper.generateHere",
+          "group": "cppHelper"
+        },
+        {
+          "when": "editorLangId == cpp && !editorReadonly",
+          "command": "cpp-helper.generateInSource",
+          "group": "cppHelper"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "cpp-helper.generateInSource",
+        "key": "ctrl+shift+i",
+        "mac": "cmd+shift+i",
+        "when": "editorLangId == cpp && editorTextFocus"
+      }
+    ],
+    "configuration": {
+      "title": "C++ Function Generator",
+      "properties": {
+        "cppHelper.defaultImplementationLocation": {
+          "type": "string",
+          "default": "source",
+          "enum": ["here", "source"],
+          "enumDescriptions": [
+            "Generate implementations directly in the header file",
+            "Generate implementations in the corresponding source file"
+          ],
+          "description": "Default location for generating function implementations"
+        },
+        "cppHelper.addTodoComment": {
+          "type": "boolean",
+          "default": true,
+          "description": "Add TODO comment to generated function bodies"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.99.0",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "20.x",
+    "@typescript-eslint/eslint-plugin": "^8.28.0",
+    "@typescript-eslint/parser": "^8.28.0",
+    "eslint": "^9.23.0",
+    "typescript": "^5.8.2",
+    "@vscode/test-cli": "^0.0.10",
+    "@vscode/test-electron": "^2.4.1"
+  }
+}
