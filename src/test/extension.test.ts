@@ -73,7 +73,7 @@ suite('C++ Function Generator Extension Test Suite', () => {
 			isInline: false
 		};
 
-		const implementation = generateImplementation(prototype, false);
+		const implementation = generateImplementation(prototype);
 		assert.strictEqual(implementation.includes('void foo(int a, int b)'), true);
 		assert.strictEqual(implementation.includes('// TODO: Implement'), true);
 	});
@@ -93,7 +93,7 @@ suite('C++ Function Generator Extension Test Suite', () => {
 			isInline: false
 		};
 
-		const implementation = generateImplementation(prototype, true);
+		const implementation = generateImplementation(prototype);
 		assert.strictEqual(implementation.includes('int MyClass::getValue() const noexcept'), true);
 		assert.strictEqual(implementation.includes('// TODO: Implement'), true);
 		assert.strictEqual(implementation.includes('return {};'), true);

@@ -83,10 +83,12 @@ async function generateImplementationHere() {
 		}
 
 		// Generate the implementation
-		const implementation = generateImplementation(prototype, false);
+		const implementation = generateImplementation(prototype);
+
+		const isStandalone = prototype.className === '' || prototype.className === undefined;
 
 		// Find the position to insert the implementation
-		const insertPosition = findInsertPosition(editor.document, false);
+		const insertPosition = findInsertPosition(editor.document, false, isStandalone);
 
 		// Add to the collection
 		implementationsToAdd.push({ position: insertPosition, implementation: '\n' + implementation + '\n' });
@@ -200,7 +202,7 @@ async function generateImplementationInSource() {
 			continue;
 		}
 
-		const implementation = generateImplementation(prototype, true);
+		const implementation = generateImplementation(prototype);
 		const insertPosition = new vscode.Position(sourceDocument.lineCount, 0);
 
 		await sourceEditor.edit(editBuilder => {

@@ -304,7 +304,7 @@ export function checkHeaderGuards(document: vscode.TextDocument): boolean {
 /**
  * Generate a function implementation from its prototype
  */
-export function generateImplementation(prototype: FunctionPrototype, inSourceFile: boolean): string {
+export function generateImplementation(prototype: FunctionPrototype): string {
     const { returnType, name, parameters, preQualifiers, postQualifiers, className, templateParams, templateArgs } = prototype;
 
     // Build the function header

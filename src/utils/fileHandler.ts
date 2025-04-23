@@ -119,10 +119,11 @@ export function addHeaderInclude(sourceContent: string, headerFilePath: string):
  * Find the proper position to insert a function implementation
  * @param document The document to insert into
  * @param isSourceFile Whether this is a source file or header file
+ * @param isStandalone Whether this is a standalone function
  */
-export function findInsertPosition(document: vscode.TextDocument, isSourceFile: boolean): vscode.Position {
+export function findInsertPosition(document: vscode.TextDocument, isSourceFile: boolean, isStandalone: boolean): vscode.Position {
     // For source files, always insert at the end to maintain arrangement
-    if (isSourceFile) {
+    if (isSourceFile || isStandalone) {
         return new vscode.Position(document.lineCount, 0);
     }
     
