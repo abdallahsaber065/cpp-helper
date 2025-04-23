@@ -65,6 +65,110 @@ export interface FunctionPrototype {
 }
 
 /**
+ * Check if the cursor is positioned on a class name
+ * @param document The current document
+ * @param position The current cursor position
+ * @returns The class name if cursor is on a class name, undefined otherwise
+ */
+export function getClassNameAtCursor(document: vscode.TextDocument, position: vscode.Position): string | undefined {
+    // Get the current line text
+    const line = document.lineAt(position.line).text;
+    
+    // Get the word at the current position
+    const wordRange = document.getWordRangeAtPosition(position);
+    if (!wordRange) {
+        return undefined;
+    }
+    
+    const word = document.getText(wordRange);
+    
+    // Check if the word is preceded by "class" or "struct" keyword on the same line
+    const linePrefix = line.substring(0, wordRange.start.character).trim();
+    if (linePrefix.endsWith('class') || linePrefix.endsWith('struct')) {
+        return word;
+    }
+    
+    // Sometimes cursor might be on the class name in a different context
+    // Check if this word is defined as a class/struct elsewhere in the document
+    const fullText = document.getText();
+    const classDefinitionRegex = new RegExp(`\\b(class|struct)\\s+${word}\\s*[:{]`);
+    
+    if (classDefinitionRegex.test(fullText)) {
+        return word;
+    }
+    
+    return undefined;
+}
+
+/**
+ * Find all unimplemented method prototypes in a class
+ * @param document The current document
+ * @param className The name of the class to extract methods from
+ * @returns Array of positions where method prototypes are found
+ */
+export function findClassMethodPrototypes(document: vscode.TextDocument, className: string): vscode.Position[] {
+    const positions: vscode.Position[] = [];
+    const documentText = document.getText();
+    
+    // First find the class definition
+    const classRegex = new RegExp(`\\b(class|struct)\\s+${className}\\s*(?:<[^>]*>)?\\s*(?::[^{]*)?\\s*\\{`, 'g');
+    const classMatch = classRegex.exec(documentText);
+    
+    if (!classMatch) {
+        return positions;
+    }
+    
+    // Find the opening brace position
+    const classStartIndex = classMatch.index;
+    let openBracePos = documentText.indexOf('{', classStartIndex);
+    
+    if (openBracePos === -1) {
+        return positions;
+    }
+    
+    // Now find the matching closing brace by counting braces
+    let braceCount = 1;
+    let closeBracePos = -1;
+    
+    for (let i = openBracePos + 1; i < documentText.length; i++) {
+        if (documentText[i] === '{') {
+            braceCount++;
+        } else if (documentText[i] === '}') {
+            braceCount--;
+            if (braceCount === 0) {
+                closeBracePos = i;
+                break;
+            }
+        }
+    }
+    
+    if (closeBracePos === -1) {
+        return positions;
+    }
+    
+    // Extract the class content
+    const classContent = documentText.substring(openBracePos + 1, closeBracePos);
+    
+    // Find all method prototypes (ending with semicolon)
+    // This regex finds function declarations but avoids matching variable declarations
+    const methodRegex = /([^;{}]*?\b\w+\s*\([^)]*\)(?:\s*(?:const|noexcept|override|final|\s*)*)?);/g;
+    let methodMatch;
+    
+    while ((methodMatch = methodRegex.exec(classContent)) !== null) {
+        // Convert string index to position in document
+        const methodEndPos = documentText.indexOf(methodMatch[0], openBracePos) + methodMatch[0].length;
+        const pos = document.positionAt(methodEndPos);
+        
+        // Only add if it looks like a real method (has parentheses)
+        if (methodMatch[0].includes('(') && methodMatch[0].includes(')')) {
+            positions.push(pos);
+        }
+    }
+    
+    return positions;
+}
+
+/**
  * Parse a C++ function prototype from the current selection or line
  * @param document The current document
  * @param position The current cursor position
