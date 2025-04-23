@@ -42,21 +42,13 @@ async function generateImplementationHere() {
     return;
   }
 
-  // Get the function prototype at the current position
-  const prototype = parseFunctionPrototype(editor.document, editor.selection.active);
-  if (!prototype) {
-    vscode.window.showWarningMessage('No function prototype found at the current position');
+  // Process all selections (multi-cursor support)
+  const selections = editor.selections;
+  if (selections.length === 0) {
     return;
   }
 
-  // Check if the function is already implemented in this file
-  const documentText = editor.document.getText();
-  if (functionAlreadyImplemented(prototype.name, prototype.className, documentText)) {
-    vscode.window.showWarningMessage(`Function '${prototype.name}' is already implemented in this file`);
-    return;
-  }
-
-  // Check for header guards
+  // Check for header guards only once
   if (!checkHeaderGuards(editor.document)) {
     const addGuards = await vscode.window.showWarningMessage(
       'This header file lacks proper include guards. Would you like to add #pragma once?',
@@ -71,18 +63,42 @@ async function generateImplementationHere() {
     }
   }
 
-  // Generate the implementation
-  const implementation = generateImplementation(prototype, false);
+  // Collection of implementations to add
+  const implementationsToAdd: { position: vscode.Position, implementation: string }[] = [];
   
-  // Find the position to insert the implementation
-  const insertPosition = findInsertPosition(editor.document, false);
-  
-  // Insert the implementation directly without confirmation
-  await editor.edit(editBuilder => {
-    editBuilder.insert(insertPosition, '\n' + implementation + '\n');
-  });
-  
-  vscode.window.showInformationMessage(`Successfully added implementation for '${prototype.name}'`);
+  // Process each selection
+  for (const selection of selections) {
+    // Get the function prototype at the current position
+    const prototype = parseFunctionPrototype(editor.document, selection.active);
+    if (!prototype) {
+      continue; // Skip invalid selections
+    }
+
+    // Check if the function is already implemented in this file
+    const documentText = editor.document.getText();
+    if (functionAlreadyImplemented(prototype.name, prototype.className, documentText)) {
+      vscode.window.showWarningMessage(`Function '${prototype.name}' is already implemented in this file`);
+      continue;
+    }
+
+    // Generate the implementation
+    const implementation = generateImplementation(prototype, false);
+    
+    // Find the position to insert the implementation
+    const insertPosition = findInsertPosition(editor.document, false);
+    
+    // Add to the collection
+    implementationsToAdd.push({ position: insertPosition, implementation: '\n' + implementation + '\n' });
+  }
+
+  // Apply all implementations in a single edit
+  if (implementationsToAdd.length > 0) {
+    await editor.edit(editBuilder => {
+      for (const item of implementationsToAdd) {
+        editBuilder.insert(item.position, item.implementation);
+      }
+    });
+  }
 }
 
 // Command to generate function implementation in the corresponding source file
@@ -101,44 +117,13 @@ async function generateImplementationInSource() {
     return;
   }
 
-  // Get the function prototype at the current position
-  const prototype = parseFunctionPrototype(editor.document, editor.selection.active);
-  if (!prototype) {
-    vscode.window.showWarningMessage('No function prototype found at the current position');
+  // Process all selections (multi-cursor support)
+  const selections = editor.selections;
+  if (selections.length === 0) {
     return;
   }
 
-  // Special handling for template functions
-  if (prototype.isTemplated) {
-    const implementInHeader = await vscode.window.showWarningMessage(
-      'Template function implementations should typically be in the header file. Continue anyway?',
-      'Continue', 'Implement in Header'
-    );
-    
-    if (implementInHeader === 'Implement in Header') {
-      return generateImplementationHere();
-    } else if (!implementInHeader) {
-      return; // User cancelled
-    }
-  }
-
-  // Warning for static/inline functions
-  if (prototype.isStatic || prototype.isInline) {
-    const warning = prototype.isStatic 
-      ? 'Static functions should be implemented in the header file.'
-      : 'Inline functions should be implemented in the header file.';
-      
-    const proceed = await vscode.window.showWarningMessage(
-      `${warning} Continue anyway?`,
-      'Continue', 'Cancel'
-    );
-    
-    if (!proceed || proceed === 'Cancel') {
-      return;
-    }
-  }
-
-  // Find or create the source file
+  // Find or create the source file (do this only once)
   const headerFilePath = editor.document.uri.fsPath;
   let sourceFilePath = findCorrespondingSourceFile(headerFilePath);
   
@@ -150,7 +135,7 @@ async function generateImplementationInSource() {
     }
   }
   
-  // Check if the source file includes the header
+  // Check if the source file includes the header (do this only once)
   if (!checkHeaderIncluded(sourceFilePath, headerFilePath)) {
     const addInclude = await vscode.window.showWarningMessage(
       `The source file does not include the header "${path.basename(headerFilePath)}". Add it?`,
@@ -173,26 +158,75 @@ async function generateImplementationInSource() {
 
   // Open the source file
   const sourceDocument = await vscode.workspace.openTextDocument(sourceFilePath);
+  const sourceEditor = await vscode.window.showTextDocument(sourceDocument);
   
-  // Check if the function is already implemented in the source file
-  if (functionAlreadyImplemented(prototype.name, prototype.className, sourceDocument.getText())) {
-    vscode.window.showWarningMessage(`Function '${prototype.name}' is already implemented in the source file`);
-    return;
+  // Collection of implementations to add
+  const implementationsToAdd: { position: vscode.Position, implementation: string }[] = [];
+  const sourceText = sourceDocument.getText();
+  
+  // Process each selection
+  for (const selection of selections) {
+    // Get the function prototype at the current position
+    const prototype = parseFunctionPrototype(editor.document, selection.active);
+    if (!prototype) {
+      continue; // Skip invalid selections
+    }
+
+    // Special handling for template functions - display warning once per template function
+    if (prototype.isTemplated) {
+      const implementInHeader = await vscode.window.showWarningMessage(
+        'Template function implementations should typically be in the header file. Continue anyway?',
+        'Continue', 'Implement in Header'
+      );
+      
+      if (implementInHeader === 'Implement in Header') {
+        // Skip this prototype and handle it with the header implementation
+        continue;
+      } else if (!implementInHeader) {
+        continue; // User cancelled
+      }
+    }
+
+    // Warning for static/inline functions
+    if (prototype.isStatic || prototype.isInline) {
+      const warning = prototype.isStatic 
+        ? 'Static functions should be implemented in the header file.'
+        : 'Inline functions should be implemented in the header file.';
+        
+      const proceed = await vscode.window.showWarningMessage(
+        `${warning} Continue anyway?`,
+        'Continue', 'Cancel'
+      );
+      
+      if (!proceed || proceed === 'Cancel') {
+        continue;
+      }
+    }
+
+    // Check if the function is already implemented in the source file
+    if (functionAlreadyImplemented(prototype.name, prototype.className, sourceText)) {
+      vscode.window.showWarningMessage(`Function '${prototype.name}' is already implemented in the source file`);
+      continue;
+    }
+
+    // Generate the implementation
+    const implementation = generateImplementation(prototype, true);
+    
+    // Find the position to insert (end of the file for source file)
+    const insertPosition = findInsertPosition(sourceDocument, true);
+    
+    // Add to the collection
+    implementationsToAdd.push({ position: insertPosition, implementation: '\n' + implementation + '\n' });
   }
 
-  // Generate the implementation
-  const implementation = generateImplementation(prototype, true);
-  
-  // Find the position to insert (end of the file for source file)
-  const insertPosition = findInsertPosition(sourceDocument, true);
-  
-  // Show the source file and insert the implementation directly without confirmation
-  const sourceEditor = await vscode.window.showTextDocument(sourceDocument);
-  await sourceEditor.edit(editBuilder => {
-    editBuilder.insert(insertPosition, '\n' + implementation + '\n');
-  });
-  
-  vscode.window.showInformationMessage(`Successfully added implementation for '${prototype.name}'`);
+  // Apply all implementations in a single edit
+  if (implementationsToAdd.length > 0) {
+    await sourceEditor.edit(editBuilder => {
+      for (const item of implementationsToAdd) {
+        editBuilder.insert(item.position, item.implementation);
+      }
+    });
+  }
 }
 
 export function deactivate() {}
